@@ -1,0 +1,55 @@
+# http://www.umeituku.com/bizhitupian/meinvbizhi/
+
+# 1.拿到主页面源代码，然后提取子页面的链接地址，href
+# 2.通过href拿到子页面的内容，从子页面中找到图片的下载地址 img -> src
+# 3.下载图片
+
+import requests
+from bs4 import BeautifulSoup
+import os
+
+if not os.path.exists('./images'):
+    os.mkdir('./images')
+
+
+url = 'http://www.umeituku.com/bizhitupian/meinvbizhi/'
+headers = {
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.78"
+}
+response = requests.get(url=url, headers=headers)
+response.encoding = ' utf-8'  # 处理乱码问题
+host_page_text = response.text
+# print(response.text)
+
+
+# 将主页面源代码加载到BeautifulSoup对象中
+host_soup = BeautifulSoup(host_page_text, 'lxml')
+a_list = host_soup.find('div', class_="TypeList").find_all('a')
+# print(a_list)
+
+# 遍历a标签，提取出子页面的url
+for a in a_list:
+    # 提取a标签下href对应的属性值：即，子页面的url
+    href = a['href']
+    # print(href)
+
+    # 拿到子页面的源代码
+    page_response = requests.get(url=href, headers=headers)
+    page_response.encoding = 'utf-8'
+    page_text = page_response.text
+
+    # 将子页面源代码加载到beautifulsoup对象中
+    page_soup = BeautifulSoup(page_text, 'lxml')
+    p = page_soup.find('p', align="center")
+    img = p.find('img')
+    img_src = img['src']
+    img_name = img_src.split('/')[-1]
+    # print(img_src)
+
+    # 设置图片存储路径，并完成对图片的下载
+    save_path = './images/'
+    img_content = requests.get(url=img_src, headers=headers).content
+
+    with open(save_path + img_name, mode='wb') as fp:
+        fp.write(img_content)
+        print(img_name + ' 下载完毕！')
