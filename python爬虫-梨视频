@@ -1,0 +1,75 @@
+# 需求：爬取梨视频的视频数据：https://www.pearvideo.com/category_1
+
+# 1.导包 和 设置视频存储路径
+import requests
+from lxml import etree
+import random
+import os
+
+
+if not os.path.exists('./videos/梨视频'):
+    os.mkdir('./videos/梨视频')
+save_path = './videos/梨视频/'
+
+# 2.指定主页url，并对主页发出get请求，然后对响应数据进行处理
+url = 'https://www.pearvideo.com/category_1'
+host_headers = {
+    "user-agent": "https://www.pearvideo.com/video_1156899"
+}
+page_text = requests.get(url=url, headers=host_headers).text
+tree = etree.HTML(page_text)
+href_list = tree.xpath('//div[@class="vervideo-bd"]/a/@href')
+# print(href_list)
+
+# 3.遍历列表，提取并拼接出详情页完整的url
+for href in href_list:
+    inner_url = 'https://www.pearvideo.com/' + href
+    # print(inner_url)
+
+    # 4.对详情页源代码进行分析，找出视频链接。
+    #   但是通过分析，我们可以发现视频的详情页源代码中是不含有视频链接的，也就是说详情页中的视频 是动态加载出来的，这时候就需要我们去分析ajax文件了。
+    #   通过抓包工具，我们可以看到Fetch/XHD中存在这样一个请求：https://www.pearvideo.com/videoStatus.jsp?contId=1156899&mrd=0.13727699405356097。但是打开这个链接，发现并不是我们想要的视频，而是这样的：
+    # {
+    # "resultCode":"5",
+    # "resultMsg":"该文章已经下线！",
+    # "systemTime": "1676187693726"
+    # }
+    #   其实这是网站使用的一种反爬机制，即——防盗链（Referer）
+    #   通过抓包工具，我们可以看到该请求的Referer是：https://www.pearvideo.com/video_1156899 这个链接就是我们的inner_url
+
+    # 5.找出ajax文件发出请求url，并找到参数 contId 和 mrd
+    #   经常分析，我们可以看出参数 mrd 是一个随机的浮点数，这个浮点数范围是0-1之间
+    inner_text = requests.get(url=inner_url, headers=host_headers).text
+    title = etree.HTML(inner_text).xpath('//h1[@class="video-tt"]/text()')[0] + '.mp4'
+    contId = etree.HTML(inner_text).xpath('//div[@id="poster"]/@data-cid')[0]
+    mrd = random.random()
+    ajax_url = 'https://www.pearvideo.com/videoStatus.jsp?'
+    params = {
+        "contId": contId,
+        "mrd": mrd
+    }
+
+    # 6.重新定义ajax_headers，加上Referer，对上面网址发出get请求，并对响应数据json进行处理
+    ajax_headers = {
+        "user-agent": "https://www.pearvideo.com/video_1156899",
+        "Referer": inner_url
+    }
+    response = requests.get(url=ajax_url, headers=ajax_headers, params=params)
+    systemTime = response.json()['systemTime']
+    srcUrl = response.json()['videoInfo']['videos']['srcUrl']
+    # print(srcUrl)
+
+    # 7.此时我们找到了json文件中包含的视频url，但是我们打开发现网页报404错，这就意味着这个链接其实并不是真正的视频链接；那么，我们开始对视频进行分析，
+    # 发现视频的真正链接是：https://video.pearvideo.com/mp4/short/20170915/cont-1156899-10890623-hd.mp4
+    # 通过对比分析，可以发现这两个链接只有一处不同的地方(systemTime)，那么接下来我们就要把伪装的链接通过字符串替换，拿到真正的视频链接
+
+    # 8.把伪装的链接通过字符串替换，拿到真正的视频链接
+    srcUrl = str(srcUrl).replace(systemTime,f'cont-{contId}')
+    # print(srcUrl)
+
+    # 9.保存视频，并附上视频标题
+    content = requests.get(url=srcUrl,headers=ajax_headers).content
+    with open(save_path+title,mode='wb') as fp:
+        fp.write(content)
+        fp.close()
+    print(f'{title} 下载完毕！！！')
