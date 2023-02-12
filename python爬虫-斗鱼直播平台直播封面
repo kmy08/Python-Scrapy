@@ -1,0 +1,52 @@
+import requests
+import re
+from time import sleep
+import os
+
+if not os.path.exists('./images/斗鱼直播封面'):
+    os.mkdir('./images/斗鱼直播封面')
+save_path = './images/斗鱼直播封面/'
+
+if __name__ == '__main__':
+
+    # 1.创建一个空白的session对象
+    session = requests.Session()
+
+    # 2.指定url
+    url = 'https://www.douyu.com/g_dance'
+
+    # 3.UA 伪装
+    headers = {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.41"
+    }
+
+    # 4.使用session发起的请求，目的是为了捕获到cookie，且将其存储到session对象中
+    session.get(url=url, headers=headers)
+
+    # 5.再次使用session对url发出请求，此时发出的请求附带cookie；然后对响应数据进行处理
+    response = session.get(url=url, headers=headers)
+    page_text = response.text
+
+    # 6.通过页面源代码,使用正则表达式 找到封面图片的src 和 直播标题
+    img_ex = '<source srcset=.*?webpdy1.5 1.5x, (.*?) 2x" type="image/webp"'
+    title_ex = '<h3.*?>(.*?)</h3>'
+    src_lists = re.findall(img_ex, page_text, re.S)
+    title_list = re.findall(title_ex, page_text, re.S)
+    title_list.pop(0)
+    title_list
+    # print(src_lists)
+    # print(title_list)
+
+    # 7.对标题和图片链接进行遍历，确保标题和图片一一照应
+    for title, img_src in zip(title_list, src_lists):
+        # print(title, img_src)
+
+        # 对图片链接发出请求,并保存图片
+        img_content = requests.get(url=img_src, headers=headers).content
+        with open(save_path+title+'.jpg', mode="wb") as fp:
+            fp.write(img_content)
+            fp.close()
+
+        sleep(0.5)
+
+        print(title, ' 下载完成！')
